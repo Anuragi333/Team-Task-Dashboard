@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react"
 import { LoginForm } from "../components/auth/login-form"
 import { RegisterForm } from "../components/auth/register-form"
+import { AdminLoginForm } from "../components/auth/admin-login-form"
+import { TeamSelection } from "../components/dashboard/team-selection"
+import { AdminPanel } from "../components/admin/admin-panel"
 import { TaskCard } from "../components/dashboard/task-card"
 import { TaskDetailsModal } from "../components/dashboard/task-details-modal"
 import { AnalyticsDashboard } from "../components/dashboard/analytics-dashboard"
@@ -12,12 +15,16 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Search, Eye, EyeOff, LogOut, BarChart3 } from "lucide-react"
-import type { Task, Milestone, Comment, User } from "../types"
+import { Plus, Search, Eye, EyeOff, LogOut, BarChart3, Shield } from "lucide-react"
+import type { Task, Milestone, Comment, User, Team } from "../types"
+
+type AppScreen = "auth" | "team-selection" | "dashboard" | "admin"
 
 export default function TaskTracker() {
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>("auth")
   const [user, setUser] = useState<User | null>(null)
-  const [authMode, setAuthMode] = useState<"login" | "register">("login")
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+  const [authMode, setAuthMode] = useState<"login" | "register" | "admin">("login")
   const [tasks, setTasks] = useState<Task[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [comments, setComments] = useState<Comment[]>([])
@@ -44,10 +51,10 @@ export default function TaskTracker() {
   ]
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedTeam) {
       loadTasks()
     }
-  }, [user])
+  }, [user, selectedTeam])
 
   const handleLogin = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -60,6 +67,7 @@ export default function TaskTracker() {
       if (response.ok) {
         const data = await response.json()
         setUser(data.user)
+        setCurrentScreen("team-selection")
         return true
       }
       return false
@@ -80,6 +88,7 @@ export default function TaskTracker() {
       if (response.ok) {
         const data = await response.json()
         setUser(data.user)
+        setCurrentScreen("team-selection")
         return true
       }
       return false
@@ -89,16 +98,34 @@ export default function TaskTracker() {
     }
   }
 
+  const handleSelectTeam = (team: Team) => {
+    setSelectedTeam(team)
+    setCurrentScreen("dashboard")
+  }
+
   const handleLogout = () => {
     setUser(null)
+    setSelectedTeam(null)
     setTasks([])
     setSelectedTask(null)
     setActiveTab("dashboard")
+    setCurrentScreen("auth")
+    setAuthMode("login")
   }
 
+  const handleOpenAdmin = () => {
+    setCurrentScreen("admin")
+  }
+
+  const handleBackToTeams = () => {
+    setCurrentScreen("team-selection")
+    setSelectedTeam(null)
+  }
+
+  // ... (rest of the task management functions remain the same)
   const loadTasks = async () => {
     try {
-      const response = await fetch(`/api/tasks?userId=${user?.id}`)
+      const response = await fetch(`/api/tasks?userId=${user?.id}&teamId=${selectedTeam?.id}`)
       if (response.ok) {
         const data = await response.json()
         setTasks(data)
@@ -142,7 +169,7 @@ export default function TaskTracker() {
         body: JSON.stringify({
           ...newTask,
           created_by: user.id,
-          team_id: 1, // Default team - in real app, user would select
+          team_id: selectedTeam?.id,
           assigned_to: newTask.assigned_to ? Number.parseInt(newTask.assigned_to) : null,
         }),
       })
@@ -300,18 +327,43 @@ export default function TaskTracker() {
   const completedTasks = filteredTasks.filter((task) => task.status === "Completed")
   const displayTasks = showCompleted ? filteredTasks : activeTasks
 
-  if (!user) {
+  // Render based on current screen
+  if (currentScreen === "auth") {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
-        {authMode === "login" ? (
-          <LoginForm onLogin={handleLogin} onSwitchToRegister={() => setAuthMode("register")} />
-        ) : (
-          <RegisterForm onRegister={handleRegister} onSwitchToLogin={() => setAuthMode("login")} />
-        )}
+        <div className="w-full max-w-md">
+          {authMode === "login" ? (
+            <LoginForm
+              onLogin={handleLogin}
+              onSwitchToRegister={() => setAuthMode("register")}
+              onSwitchToAdmin={() => setAuthMode("admin")}
+            />
+          ) : authMode === "register" ? (
+            <RegisterForm onRegister={handleRegister} onSwitchToLogin={() => setAuthMode("login")} />
+          ) : (
+            <AdminLoginForm onBack={() => setAuthMode("login")} />
+          )}
+        </div>
       </div>
     )
   }
 
+  if (currentScreen === "team-selection") {
+    return (
+      <TeamSelection
+        user={user!}
+        onSelectTeam={handleSelectTeam}
+        onLogout={handleLogout}
+        onOpenAdmin={handleOpenAdmin}
+      />
+    )
+  }
+
+  if (currentScreen === "admin") {
+    return <AdminPanel user={user!} onBack={handleBackToTeams} />
+  }
+
+  // Dashboard screen (existing dashboard code)
   return (
     <div className="min-h-screen bg-black text-white">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -319,12 +371,21 @@ export default function TaskTracker() {
         <div className="border-b border-gray-800 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">Team Task Tracker</h1>
+              <h1 className="text-4xl font-bold text-white mb-2">{selectedTeam?.name} Dashboard</h1>
               <div className="h-1 w-24 bg-white rounded-full"></div>
-              <p className="text-gray-400 mt-2">Welcome back, {user.name}</p>
+              <p className="text-gray-400 mt-2">Welcome back, {user?.name}</p>
             </div>
 
             <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                onClick={handleBackToTeams}
+                className="bg-gray-900/50 border-gray-700 text-white hover:bg-gray-800"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Switch Team
+              </Button>
+
               <Button
                 variant="outline"
                 onClick={handleLogout}
@@ -347,9 +408,10 @@ export default function TaskTracker() {
           </TabsList>
         </div>
 
+        {/* Rest of dashboard content remains the same */}
         <div className="p-6">
           <TabsContent value="dashboard" className="space-y-6">
-            {/* Controls */}
+            {/* Dashboard content */}
             <div className="flex items-center justify-between">
               <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -551,7 +613,7 @@ export default function TaskTracker() {
           </TabsContent>
 
           <TabsContent value="analytics">
-            <AnalyticsDashboard userId={user.id} />
+            <AnalyticsDashboard userId={user?.id} teamId={selectedTeam?.id} />
           </TabsContent>
         </div>
       </Tabs>

@@ -3,22 +3,38 @@ import type { Team, TeamMember } from "../types"
 
 export async function getTeams(userId?: number): Promise<Team[]> {
   try {
-    let query = `
-      SELECT DISTINCT t.*
-      FROM teams t
-    `
+    let result
 
     if (userId) {
-      query += `
+      result = await sql`
+        SELECT DISTINCT t.*, 
+               COUNT(DISTINCT tm.user_id) as member_count,
+               COUNT(DISTINCT ta.id) as task_count
+        FROM teams t
         LEFT JOIN team_members tm ON t.id = tm.team_id
+        LEFT JOIN tasks ta ON t.id = ta.team_id
         WHERE t.created_by = ${userId} OR tm.user_id = ${userId}
+        GROUP BY t.id, t.name, t.description, t.created_by, t.created_at, t.updated_at
+        ORDER BY t.created_at DESC
+      `
+    } else {
+      result = await sql`
+        SELECT t.*, 
+               COUNT(DISTINCT tm.user_id) as member_count,
+               COUNT(DISTINCT ta.id) as task_count
+        FROM teams t
+        LEFT JOIN team_members tm ON t.id = tm.team_id
+        LEFT JOIN tasks ta ON t.id = ta.team_id
+        GROUP BY t.id, t.name, t.description, t.created_by, t.created_at, t.updated_at
+        ORDER BY t.created_at DESC
       `
     }
 
-    query += ` ORDER BY t.created_at DESC`
-
-    const result = await sql(query)
-    return result as Team[]
+    return result.map((row: any) => ({
+      ...row,
+      memberCount: Number.parseInt(row.member_count) || 0,
+      taskCount: Number.parseInt(row.task_count) || 0,
+    })) as Team[]
   } catch (error) {
     console.error("Error getting teams:", error)
     return []

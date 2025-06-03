@@ -3,9 +3,33 @@ export interface User {
   email: string
   name: string
   role: "admin" | "manager" | "member"
+  role_id?: number
   avatar_url?: string
   created_at: string
   updated_at: string
+  roleDetails?: Role
+}
+
+export interface Role {
+  id: number
+  name: string
+  description?: string
+  permissions: Record<string, any>
+  level: number
+  created_by?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminRequest {
+  id: number
+  email: string
+  name: string
+  reason?: string
+  status: "pending" | "approved" | "rejected"
+  requested_at: string
+  reviewed_at?: string
+  reviewed_by?: number
 }
 
 export interface Team {
@@ -15,6 +39,8 @@ export interface Team {
   created_by: number
   created_at: string
   updated_at: string
+  memberCount?: number
+  taskCount?: number
 }
 
 export interface TeamMember {

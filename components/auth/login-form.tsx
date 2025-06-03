@@ -8,13 +8,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Shield } from "lucide-react"
 
 interface LoginFormProps {
   onLogin: (email: string, password: string) => Promise<boolean>
   onSwitchToRegister: () => void
+  onSwitchToAdmin?: () => void
 }
 
-export function LoginForm({ onLogin, onSwitchToRegister }: LoginFormProps) {
+export function LoginForm({ onLogin, onSwitchToRegister, onSwitchToAdmin }: LoginFormProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -78,14 +80,29 @@ export function LoginForm({ onLogin, onSwitchToRegister }: LoginFormProps) {
           <Button type="submit" className="w-full bg-white text-black hover:bg-gray-200" disabled={isLoading}>
             {isLoading ? "Signing in..." : "Sign In"}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full text-gray-400 hover:text-white"
-            onClick={onSwitchToRegister}
-          >
-            Don't have an account? Sign up
-          </Button>
+
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-gray-400 hover:text-white"
+              onClick={onSwitchToRegister}
+            >
+              Don't have an account? Sign up
+            </Button>
+
+            {onSwitchToAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full bg-blue-900/20 border-blue-700 text-blue-400 hover:bg-blue-900/30"
+                onClick={onSwitchToAdmin}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Admin Access
+              </Button>
+            )}
+          </div>
         </form>
       </CardContent>
     </Card>
