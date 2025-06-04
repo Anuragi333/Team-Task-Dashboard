@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { updateUserRole } from "../../../../../../lib/admin"
+import { sql } from "../../../../../../lib/database"
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -10,11 +10,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Role ID is required" }, { status: 400 })
     }
 
-    const success = await updateUserRole(userId, roleId)
-
-    if (!success) {
-      return NextResponse.json({ error: "Failed to update user role" }, { status: 500 })
-    }
+    await sql`
+      UPDATE users 
+      SET role_id = ${roleId}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${userId}
+    `
 
     return NextResponse.json({ success: true })
   } catch (error) {

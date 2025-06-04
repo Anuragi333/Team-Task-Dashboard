@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { authenticateUser } from "../../../../lib/auth"
+import { sql } from "../../../../lib/database"
+import bcrypt from "bcryptjs"
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,13 +10,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const user = await authenticateUser(email, password)
+    // Get user with role details
+    const result = await sql`
+      SELECT u.*, r.name as role_name, r.description as role_description, 
+             r.permissions, r.level
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      WHERE u.email = ${email}
+    `
 
-    if (!user) {
+    if (result.length === 0) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    return NextResponse.json({ user })
+    const user = result[0]
+    const isValid = await bcrypt.compare(password, user.password_hash)
+
+    if (!isValid) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    // Remove password_hash from returned user
+    const { password_hash, ...userWithoutPassword } = user
+    const userWithRole = {
+      ...userWithoutPassword,
+      roleDetails: {
+        id: user.role_id,
+        name: user.role_name,
+        description: user.role_description,
+        permissions: user.permissions,
+        level: user.level,
+        created_at: "",
+        updated_at: "",
+      },
+    }
+
+    return NextResponse.json({ user: userWithRole })
   } catch (error) {
     console.error("Login error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -1,10 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getRoles, createRole } from "../../../../lib/admin"
+import { sql } from "../../../../lib/database"
 
 export async function GET() {
   try {
-    const roles = await getRoles()
-    return NextResponse.json(roles)
+    const result = await sql`
+      SELECT * FROM roles
+      ORDER BY level DESC, name ASC
+    `
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Error getting roles:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -13,19 +16,19 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const roleData = await request.json()
+    const { name, description, level, permissions, created_by } = await request.json()
 
-    if (!roleData.name || !roleData.level) {
+    if (!name || !level) {
       return NextResponse.json({ error: "Name and level are required" }, { status: 400 })
     }
 
-    const role = await createRole(roleData)
+    const result = await sql`
+      INSERT INTO roles (name, description, permissions, level, created_by)
+      VALUES (${name}, ${description || null}, ${JSON.stringify(permissions || {})}, ${level}, ${created_by})
+      RETURNING *
+    `
 
-    if (!role) {
-      return NextResponse.json({ error: "Failed to create role" }, { status: 500 })
-    }
-
-    return NextResponse.json(role)
+    return NextResponse.json(result[0])
   } catch (error) {
     console.error("Error creating role:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

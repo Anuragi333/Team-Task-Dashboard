@@ -1,6 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { reviewAdminRequest } from "../../../../../lib/admin"
-import { sendAdminRequestDecision } from "../../../../../lib/email"
 import { sql } from "../../../../../lib/database"
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
@@ -26,20 +24,54 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const request_data = requestDetails[0]
 
-    const success = await reviewAdminRequest(requestId, status, reviewerId)
+    // Update the request
+    await sql`
+      UPDATE admin_requests 
+      SET status = ${status}, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = ${reviewerId}
+      WHERE id = ${requestId}
+    `
 
-    if (!success) {
-      return NextResponse.json({ error: "Failed to review request" }, { status: 500 })
-    }
-
-    // Send email notification to requester
+    // Try to send email notification to requester
     try {
-      await sendAdminRequestDecision(
-        request_data.email,
-        request_data.name,
-        status,
-        request_data.reviewer_name || "System Administrator",
-      )
+      if (process.env.RESEND_API_KEY) {
+        const { Resend } = await import("resend")
+        const resend = new Resend(process.env.RESEND_API_KEY)
+
+        const isApproved = status === "approved"
+        await resend.emails.send({
+          from: "Task Tracker <noreply@tasktracker.dev>",
+          to: [request_data.email],
+          subject: `Admin Access Request ${isApproved ? "Approved" : "Rejected"} - Task Tracker`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h1 style="color: #333;">
+                ${isApproved ? "✅" : "❌"} Admin Access Request ${isApproved ? "Approved" : "Rejected"}
+              </h1>
+              
+              <p>Hello ${request_data.name},</p>
+              
+              <div style="background-color: ${isApproved ? "#d4edda" : "#f8d7da"}; padding: 20px; border-radius: 6px; margin: 20px 0;">
+                <p style="color: ${isApproved ? "#155724" : "#721c24"}; margin: 0; font-weight: bold;">
+                  Your admin access request has been ${status} by ${request_data.reviewer_name || "System Administrator"}.
+                </p>
+              </div>
+
+              ${
+                isApproved
+                  ? `
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${process.env.NEXT_PUBLIC_APP_URL}" 
+                     style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                    Access Task Tracker
+                  </a>
+                </div>
+              `
+                  : ""
+              }
+            </div>
+          `,
+        })
+      }
     } catch (emailError) {
       console.error("Failed to send decision email:", emailError)
       // Don't fail the request if email fails
