@@ -1,5 +1,5 @@
 import bcryptjs from 'bcryptjs';
-import { createClient } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 
 const email = 'anuragiananya@gmail.com';
 const newPassword = 'AdminReset2026!';
@@ -14,9 +14,7 @@ async function resetPassword() {
     
     // Connect to database
     console.log(`[v0] Connecting to database...`);
-    const sql = createClient({
-      connectionString: process.env.DATABASE_URL,
-    });
+    const sql = neon(process.env.DATABASE_URL);
 
     // Update password
     console.log(`[v0] Updating password for ${email}...`);
